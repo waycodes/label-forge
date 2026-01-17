@@ -1,0 +1,38 @@
+# vLLM Throughput Engine Configuration
+# Maximum throughput, batch-invariant reproducibility
+
+engine:
+  # Enable multiprocessing for throughput
+  enable_v1_multiprocessing: true
+  
+  # Still maintain batch invariance
+  batch_invariant: true
+  
+  # Enable prefix caching for efficiency
+  enable_prefix_caching: true
+  
+  # Enable chunked prefill for better scheduling
+  enable_chunked_prefill: true
+
+# Batching
+batching:
+  max_num_seqs: 256
+  max_num_batched_tokens: 8192
+
+# Environment variables
+env_vars:
+  VLLM_BATCH_INVARIANT: "1"
+
+# Sampling defaults
+sampling:
+  temperature: 0.7
+  top_p: 0.9
+  
+# Notes
+notes: |
+  This configuration prioritizes throughput while maintaining
+  batch-invariant reproducibility.
+  Use for:
+  - Production labeling at scale
+  - Large-batch annotation jobs
+  - When exact ordering is not required
