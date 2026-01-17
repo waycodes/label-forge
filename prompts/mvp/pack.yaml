@@ -1,0 +1,162 @@
+# MVP Prompt Pack
+
+name: mvp
+version: "1.0.0"
+description: Minimal prompt pack for testing LabelForge
+
+author: LabelForge Team
+created_at: "2024-01-01T00:00:00Z"
+
+# Default system instruction
+system_instruction: |
+  You are a helpful AI assistant specialized in analyzing images and text.
+  Always provide accurate, detailed responses.
+
+# Prompt templates
+templates:
+  caption_basic:
+    name: caption_basic
+    description: Basic image captioning prompt
+    template: "Describe this image in detail. Focus on the main subjects, their actions, and the setting."
+    required_vars: []
+    optional_vars: []
+    
+  caption_detailed:
+    name: caption_detailed
+    description: Detailed image captioning with style guidance
+    template: |
+      Provide a detailed description of this image.
+      
+      Include:
+      - Main subjects and their appearance
+      - Actions being performed
+      - Setting and environment
+      - Notable objects or details
+      - Mood or atmosphere
+      
+      {additional_instructions}
+    required_vars: []
+    optional_vars:
+      - additional_instructions
+
+  safety_tag:
+    name: safety_tag
+    description: Binary safety classification
+    template: |
+      Analyze this image for safety concerns.
+      
+      Respond with a JSON object:
+      {
+        "safe": true/false,
+        "concerns": ["list", "of", "concerns"],
+        "confidence": 0.0-1.0
+      }
+    required_vars: []
+    optional_vars: []
+
+# Scoring rubrics
+rubrics:
+  caption_quality:
+    name: caption_quality
+    version: "1.0.0"
+    description: Evaluates the quality of image captions
+    overall_scale_min: 0.0
+    overall_scale_max: 10.0
+    criteria:
+      - name: accuracy
+        description: How accurately the caption describes the image content
+        weight: 1.0
+        scale_min: 0.0
+        scale_max: 10.0
+        levels:
+          "0-2": "Major factual errors or completely inaccurate"
+          "3-5": "Some inaccuracies or missing key details"
+          "6-8": "Mostly accurate with minor omissions"
+          "9-10": "Highly accurate and comprehensive"
+          
+      - name: detail
+        description: Level of detail and specificity in the caption
+        weight: 0.8
+        scale_min: 0.0
+        scale_max: 10.0
+        levels:
+          "0-2": "Extremely vague or generic"
+          "3-5": "Basic description lacking specifics"
+          "6-8": "Good detail with specific observations"
+          "9-10": "Excellent detail covering all aspects"
+          
+      - name: fluency
+        description: Grammatical correctness and readability
+        weight: 0.5
+        scale_min: 0.0
+        scale_max: 10.0
+        levels:
+          "0-2": "Incomprehensible or severely broken"
+          "3-5": "Understandable but awkward"
+          "6-8": "Well-written with minor issues"
+          "9-10": "Excellent fluency and style"
+
+# Output schemas
+output_schemas:
+  caption_simple:
+    schema_type: json
+    strict: false
+    schema_def:
+      type: object
+      properties:
+        caption:
+          type: string
+          description: The generated caption
+      required:
+        - caption
+
+  safety_check:
+    schema_type: json
+    strict: true
+    schema_def:
+      type: object
+      properties:
+        safe:
+          type: boolean
+        concerns:
+          type: array
+          items:
+            type: string
+        confidence:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+      required:
+        - safe
+        - confidence
+
+  rubric_score:
+    schema_type: json
+    strict: true
+    schema_def:
+      type: object
+      properties:
+        score:
+          type: number
+          minimum: 0.0
+          maximum: 10.0
+        subscores:
+          type: object
+          additionalProperties:
+            type: number
+        explanation:
+          type: string
+      required:
+        - score
+        - explanation
+
+# Few-shot examples
+few_shot_examples:
+  caption_examples:
+    - input: "[Image of a cat sleeping on a couch]"
+      output: "A fluffy orange tabby cat is curled up sleeping on a beige couch. The cat appears relaxed with its eyes closed and paws tucked underneath its body. Soft natural light from a nearby window illuminates the peaceful scene."
+      explanation: "Good example of detailed, accurate description"
+      
+    - input: "[Image of people at a beach]"
+      output: "Several people are enjoying a sunny day at a sandy beach. In the foreground, a family builds a sandcastle while others swim in the calm blue ocean. Beach umbrellas dot the shoreline, and seagulls fly overhead against a clear sky."
+      explanation: "Comprehensive scene description with multiple elements"

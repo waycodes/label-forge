@@ -1,0 +1,78 @@
+# MVP Pipeline Configuration
+
+pipeline:
+  name: mvp_labeling
+  version: "1.0.0"
+  description: Minimal viable pipeline for testing
+
+# Determinism settings
+determinism:
+  seed: 42
+  mode: standard  # or "strict"
+  vllm_batch_invariant: true
+
+# Caching
+cache:
+  enabled: true
+  directory: .cache
+
+# Output
+output:
+  directory: runs
+  format: parquet
+
+# Input dataset
+input:
+  type: fixtures
+  path: data/fixtures
+  
+# Prompt packs
+prompts:
+  directory: prompts
+  packs:
+    - name: mvp
+      version: "1.0.0"
+
+# Model specifications
+models:
+  vlm_caption:
+    model_source: "llava-hf/llava-1.5-7b-hf"
+    revision: null  # Use latest
+    task_type: generate
+    has_image: true
+    batch_size: 8
+    max_tokens: 256
+    
+  rubric_scorer:
+    model_source: "meta-llama/Llama-2-7b-chat-hf"
+    revision: null
+    task_type: generate
+    batch_size: 32
+    max_tokens: 512
+
+# Pipeline stages
+stages:
+  - name: caption
+    type: vlm_caption
+    model: vlm_caption
+    prompt_pack: mvp
+    template: caption_basic
+    output_field: caption
+
+  - name: score
+    type: rubric_score
+    model: rubric_scorer
+    prompt_pack: mvp
+    rubric: caption_quality
+    depends_on: [caption]
+    output_fields:
+      - score
+      - explanation
+
+  - name: filter_hard
+    type: filter
+    depends_on: [score]
+    params:
+      field: score
+      operator: "<"
+      value: 5.0

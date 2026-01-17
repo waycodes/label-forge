@@ -1,0 +1,34 @@
+# vLLM Deterministic Engine Configuration
+# Maximum reproducibility, reduced throughput
+
+engine:
+  # Disable multiprocessing for deterministic scheduling
+  enable_v1_multiprocessing: false
+  
+  # Enable batch invariance
+  batch_invariant: true
+  
+  # Disable prefix caching (can affect reproducibility)
+  enable_prefix_caching: false
+  
+  # Disable chunked prefill (more deterministic)
+  enable_chunked_prefill: false
+
+# Environment variables to set
+env_vars:
+  VLLM_ENABLE_V1_MULTIPROCESSING: "0"
+  VLLM_BATCH_INVARIANT: "1"
+
+# Sampling defaults
+sampling:
+  temperature: 0.0  # Greedy decoding for reproducibility
+  top_p: 1.0
+  top_k: -1
+
+# Notes
+notes: |
+  This configuration prioritizes reproducibility over throughput.
+  Use for:
+  - Regression testing
+  - Ablation studies requiring exact replay
+  - Debugging non-deterministic behavior
