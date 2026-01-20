@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use this software in research, please cite it as below."
+title: "LabelForge"
+authors:
+  - family-names: "Bharadwaj"
+    given-names: "Varun"
+repository-code: "https://github.com/waycodes/label_forge"
+license: "Proprietary"
+version: "0.1.0"
+date-released: "2026-01-20"
