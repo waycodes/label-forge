@@ -94,6 +94,12 @@ See [docs/determinism.md](docs/determinism.md) for detailed caveats.
 - [Running Ablations](docs/ablations.md)
 - [Performance Tuning](docs/perf_tuning.md)
 
-## License
+## License and Usage
 
-MIT
+This software is **proprietary** under a Portfolio/Research-Only License.
+
+- **No commercial or professional use** permitted
+- **Research use requires citation** — see [CITATION.cff](CITATION.cff)
+- **No external contributions** accepted
+
+See [LICENSE](LICENSE) for full terms.
