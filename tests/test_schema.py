@@ -210,29 +210,29 @@ class TestRubricScore:
 
     def test_create_rubric_score(self):
         """Rubric score should be creatable."""
-        score = RubricScore(
+        score_obj = RubricScore(
             score=8.5,
             explanation="Good caption with detailed description.",
         )
-        assert score.score == 8.5
+        assert score_obj.score == 8.5
 
     def test_rubric_with_subscores(self):
         """Rubric with subscores should work."""
-        score = RubricScore(
+        score_obj = RubricScore(
             score=8.0,
             subscores={"accuracy": 9.0, "detail": 7.5, "fluency": 8.0},
             explanation="Detailed breakdown.",
         )
-        assert score.subscores["accuracy"] == 9.0
+        assert score_obj.subscores["accuracy"] == 9.0
 
     def test_normalized_score(self):
         """Normalized score should be valid."""
-        score = RubricScore(
+        score_obj = RubricScore(
             score=8.0,
             normalized_score=0.8,
             explanation="Test",
         )
-        assert score.normalized_score == 0.8
+        assert score_obj.normalized_score == 0.8
 
 
 class TestEmbeddingOutput:

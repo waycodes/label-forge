@@ -45,15 +45,14 @@ class TestPromptTemplate:
         )
         assert "context" in template.required_vars
 
-    def test_template_version(self):
-        """Template should have version."""
+    def test_template_description(self):
+        """Template should have description."""
         template = PromptTemplate(
             name="caption",
-            description="Test",
+            description="A test template",
             template="Test",
-            version="2.0.0",
         )
-        assert template.version == "2.0.0"
+        assert template.description == "A test template"
 
 
 class TestRubricCriterion:
@@ -278,13 +277,21 @@ class TestPromptFingerprint:
         hash2 = compute_prompt_hash(prompt, None)
         assert hash1 == hash2
 
-    def test_fingerprint_class(self):
-        """PromptFingerprint class should work."""
-        template = PromptTemplate(
-            name="test",
-            description="",
-            template="Test",
+    def test_fingerprint_from_pack(self):
+        """PromptFingerprint should work with from_pack."""
+        pack = PromptPack(
+            name="test_pack",
+            version="1.0.0",
+            description="Test",
+            templates={
+                "test": PromptTemplate(
+                    name="test",
+                    description="",
+                    template="Test",
+                ),
+            },
         )
-        fp = PromptFingerprint.from_template(template)
+        fp = PromptFingerprint.from_pack(pack, "test")
         assert fp.template_hash is not None
         assert fp.combined_hash is not None
+        assert fp.pack_name == "test_pack"

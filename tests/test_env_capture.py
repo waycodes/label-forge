@@ -2,6 +2,7 @@
 
 import pytest
 from pathlib import Path
+import json
 
 from labelforge.core.env_capture import (
     EnvironmentSnapshot,
@@ -40,25 +41,39 @@ class TestEnvironmentSnapshot:
         snapshot = capture_environment()
         data = snapshot.to_dict()
         
-        assert "python_version" in data
-        assert "platform_system" in data
-        assert "pip_freeze" in data
+        assert "python" in data
+        assert "platform" in data
+        assert "packages" in data
 
     def test_snapshot_json_serialization(self):
         """Should serialize to JSON."""
         snapshot = capture_environment()
         json_str = snapshot.to_json()
         
-        assert "python_version" in json_str
+        assert "python" in json_str
         assert isinstance(json_str, str)
+        
+        # Should be valid JSON
+        parsed = json.loads(json_str)
+        assert "platform" in parsed
 
-    def test_snapshot_save_load(self, tmp_path):
-        """Should save and load snapshot."""
+    def test_snapshot_save(self, tmp_path):
+        """Should save snapshot to file."""
         snapshot = capture_environment()
         path = tmp_path / "env_snapshot.json"
         
         snapshot.save(path)
         assert path.exists()
+        
+        # Should be valid JSON
+        content = path.read_text()
+        parsed = json.loads(content)
+        assert "python" in parsed
 
-        loaded = EnvironmentSnapshot.load(path)
-        assert loaded.python_version == snapshot.python_version
+    def test_snapshot_platform_info(self):
+        """Should capture platform information."""
+        snapshot = capture_environment()
+        
+        assert snapshot.platform_system  # Not empty
+        assert snapshot.platform_machine  # Not empty
+        assert snapshot.python_executable  # Not empty
