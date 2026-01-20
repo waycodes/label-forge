@@ -5,6 +5,7 @@ Command-line interface for running pipelines, replays, and inspections.
 """
 
 import click
+import yaml
 
 from labelforge import __version__
 
@@ -23,6 +24,7 @@ def main() -> None:
 @click.option("--name", "-n", help="Run name")
 @click.option("--deterministic/--no-deterministic", default=True, help="Enable determinism")
 @click.option("--cache/--no-cache", default=True, help="Enable caching")
+@click.option("--dry-run", is_flag=True, help="Validate config without executing")
 def run(
     config: str,
     output: str,
@@ -30,28 +32,170 @@ def run(
     name: str | None,
     deterministic: bool,
     cache: bool,
+    dry_run: bool,
 ) -> None:
     """Run a labeling pipeline."""
-    click.echo(f"Running pipeline from config: {config}")
-    click.echo(f"Output directory: {output}")
+    from pathlib import Path
+
+    from labelforge.pipelines.dag import PipelineDAG
+    from labelforge.pipelines.runner import RunConfig, create_runner
+
+    click.echo(f"Loading pipeline config: {config}")
+
+    # Load config
+    config_path = Path(config)
+    if not config_path.exists():
+        click.echo(f"Error: Config file not found: {config}", err=True)
+        raise SystemExit(1)
+
+    try:
+        with config_path.open() as f:
+            pipeline_config = yaml.safe_load(f)
+    except yaml.YAMLError as e:
+        click.echo(f"Error parsing config: {e}", err=True)
+        raise SystemExit(1)
+
+    # Create DAG from config
+    dag = PipelineDAG()
+    stages_config = pipeline_config.get("stages", [])
+
+    for stage_cfg in stages_config:
+        stage_name = stage_cfg.get("name")
+        stage_type = stage_cfg.get("type", "transform")
+        depends_on = stage_cfg.get("depends_on", [])
+
+        if not stage_name:
+            click.echo("Error: Stage missing 'name' field", err=True)
+            raise SystemExit(1)
+
+        dag.add_node(stage_name, stage_type=stage_type, depends_on=depends_on)
+
+    click.echo(f"Pipeline has {len(stages_config)} stages")
+
+    if dry_run:
+        click.echo("\nDry run - validating configuration...")
+        execution_order = dag.get_execution_order()
+        click.echo(f"Execution order: {' -> '.join(execution_order)}")
+        click.echo("Configuration is valid!")
+        return
+
+    # Create runner
+    run_config = RunConfig(
+        run_name=name,
+        output_dir=output,
+        seed=seed,
+        deterministic_mode=deterministic,
+        cache_enabled=cache,
+    )
+
+    runner = create_runner(dag, run_config)
+
+    click.echo(f"\nStarting run: {runner.run_id}")
+    click.echo(f"Output directory: {output}/{runner.run_id}")
     click.echo(f"Seed: {seed}")
     click.echo(f"Deterministic: {deterministic}")
     click.echo(f"Cache enabled: {cache}")
 
-    # TODO: Implement pipeline execution
-    click.echo("Pipeline execution not yet implemented")
+    # Note: Actual stage registration and dataset loading
+    # would happen here, connecting stages to their implementations
+    click.echo("\nPipeline prepared. Stage registration requires implementation bindings.")
+    click.echo("Use the Python API for full pipeline execution.")
 
 
 @main.command()
 @click.argument("manifest_path")
-@click.option("--output", "-o", help="Output directory (defaults to original)")
+@click.option("--output", "-o", help="Output directory (defaults to new run dir)")
+@click.option("--mode", type=click.Choice(["cache", "verify", "from-stage", "selective"]),
+              default="cache", help="Replay mode")
+@click.option("--from-stage", help="Stage to start from (for from-stage mode)")
+@click.option("--stages", help="Comma-separated stages to execute (for selective mode)")
 @click.option("--validate/--no-validate", default=True, help="Validate environment match")
-def replay(manifest_path: str, output: str | None, validate: bool) -> None:
+def replay(
+    manifest_path: str,
+    output: str | None,
+    mode: str,
+    from_stage: str | None,
+    stages: str | None,
+    validate: bool,
+) -> None:
     """Replay a previous run from its manifest."""
-    click.echo(f"Replaying from manifest: {manifest_path}")
+    from pathlib import Path
 
-    # TODO: Implement replay
-    click.echo("Replay not yet implemented")
+    from labelforge.core.manifest.replay_planner import (
+        ManifestReader,
+        ReplayMode,
+        create_replay_plan,
+    )
+
+    click.echo(f"Loading manifest: {manifest_path}")
+
+    manifest_file = Path(manifest_path)
+    if not manifest_file.exists():
+        click.echo(f"Error: Manifest not found: {manifest_path}", err=True)
+        raise SystemExit(1)
+
+    # Load and validate manifest
+    try:
+        reader = ManifestReader(manifest_file)
+        errors = reader.validate_manifest()
+        if errors:
+            click.echo("Manifest validation errors:", err=True)
+            for error in errors:
+                click.echo(f"  - {error}", err=True)
+            raise SystemExit(1)
+    except Exception as e:
+        click.echo(f"Error loading manifest: {e}", err=True)
+        raise SystemExit(1)
+
+    click.echo(f"Source run: {reader.run_id}")
+    click.echo(f"Source seed: {reader.run_seed}")
+    click.echo(f"Stages: {', '.join(s.stage_name for s in reader.stages)}")
+
+    # Determine replay mode
+    mode_map = {
+        "cache": ReplayMode.FULL_CACHE,
+        "verify": ReplayMode.VERIFY,
+        "from-stage": ReplayMode.FROM_STAGE,
+        "selective": ReplayMode.SELECTIVE,
+    }
+    replay_mode = mode_map[mode]
+
+    # Parse selective stages
+    stages_list = stages.split(",") if stages else None
+
+    # Create output directory
+    if output is None:
+        output = str(Path(reader.output_dir).parent / f"replay_{reader.run_id[:4]}")
+
+    # Create replay plan
+    import uuid
+
+    new_run_id = str(uuid.uuid4())[:8]
+
+    try:
+        plan = create_replay_plan(
+            manifest_path=manifest_file,
+            new_run_id=new_run_id,
+            output_dir=output,
+            mode=replay_mode,
+            from_stage=from_stage,
+            stages_to_execute=stages_list,
+        )
+    except ValueError as e:
+        click.echo(f"Error creating replay plan: {e}", err=True)
+        raise SystemExit(1)
+
+    click.echo(f"\nReplay plan created:")
+    click.echo(f"  Mode: {replay_mode.value}")
+    click.echo(f"  New run ID: {new_run_id}")
+    click.echo(f"  Output: {output}")
+    click.echo(f"  Cached stages: {len(plan.cached_stages)}")
+    click.echo(f"  Execute stages: {len(plan.execute_stages)}")
+
+    if plan.execute_stages:
+        click.echo(f"  Will execute: {', '.join(sorted(plan.execute_stages))}")
+
+    click.echo("\nReplay plan ready. Execute using the Python API.")
 
 
 @main.command()
@@ -60,10 +204,42 @@ def replay(manifest_path: str, output: str | None, validate: bool) -> None:
 @click.option("--cache/--no-cache", default=True, help="Show cache stats")
 def inspect(run_path: str, stages: bool, cache: bool) -> None:
     """Inspect a run's manifests and outputs."""
-    click.echo(f"Inspecting run: {run_path}")
+    from pathlib import Path
 
-    # TODO: Implement inspection
-    click.echo("Inspection not yet implemented")
+    from labelforge.core.manifest.run_manifest import RunManifest
+
+    run_dir = Path(run_path)
+    manifest_path = run_dir / "manifest.json"
+
+    if not manifest_path.exists():
+        click.echo(f"Error: Manifest not found at {manifest_path}", err=True)
+        raise SystemExit(1)
+
+    try:
+        manifest = RunManifest.load(manifest_path)
+    except Exception as e:
+        click.echo(f"Error loading manifest: {e}", err=True)
+        raise SystemExit(1)
+
+    click.echo("=== Run Manifest ===")
+    click.echo(f"Run ID: {manifest.metadata.run_id}")
+    click.echo(f"Run Name: {manifest.metadata.run_name or '(unnamed)'}")
+    click.echo(f"Started: {manifest.metadata.started_at}")
+    click.echo(f"Seed: {manifest.metadata.run_seed}")
+    click.echo(f"Status: {manifest.status}")
+    click.echo(f"Output Dir: {manifest.output_dir}")
+
+    if manifest.metadata.git_commit:
+        click.echo(f"\nGit Commit: {manifest.metadata.git_commit}")
+        if manifest.metadata.git_branch:
+            click.echo(f"Git Branch: {manifest.metadata.git_branch}")
+
+    if stages and manifest.stages:
+        click.echo(f"\n=== Stages ({len(manifest.stages)}) ===")
+        for i, stage in enumerate(manifest.stages, 1):
+            deps = f" (depends on: {', '.join(stage.depends_on)})" if stage.depends_on else ""
+            click.echo(f"  {i}. {stage.stage_name} [{stage.stage_type}]{deps}")
+            click.echo(f"     Version: {stage.stage_version}, Hash: {stage.stage_hash[:8]}...")
 
 
 @main.command("diff")
@@ -72,10 +248,56 @@ def inspect(run_path: str, stages: bool, cache: bool) -> None:
 @click.option("--output", "-o", help="Output report path")
 def diff_runs(run_a: str, run_b: str, output: str | None) -> None:
     """Compare two runs and report differences."""
+    from pathlib import Path
+
+    from labelforge.core.manifest.run_manifest import RunManifest
+
     click.echo(f"Comparing runs: {run_a} vs {run_b}")
 
-    # TODO: Implement diff
-    click.echo("Diff not yet implemented")
+    # Load manifests
+    manifest_a_path = Path(run_a) / "manifest.json"
+    manifest_b_path = Path(run_b) / "manifest.json"
+
+    if not manifest_a_path.exists():
+        click.echo(f"Error: Manifest not found: {manifest_a_path}", err=True)
+        raise SystemExit(1)
+    if not manifest_b_path.exists():
+        click.echo(f"Error: Manifest not found: {manifest_b_path}", err=True)
+        raise SystemExit(1)
+
+    manifest_a = RunManifest.load(manifest_a_path)
+    manifest_b = RunManifest.load(manifest_b_path)
+
+    click.echo(f"\nRun A: {manifest_a.metadata.run_id} (seed: {manifest_a.metadata.run_seed})")
+    click.echo(f"Run B: {manifest_b.metadata.run_id} (seed: {manifest_b.metadata.run_seed})")
+
+    # Compare seeds
+    if manifest_a.metadata.run_seed != manifest_b.metadata.run_seed:
+        click.echo("\n⚠️  Seeds differ!")
+
+    # Compare stages
+    stages_a = {s.stage_name: s for s in manifest_a.stages}
+    stages_b = {s.stage_name: s for s in manifest_b.stages}
+
+    added = set(stages_b.keys()) - set(stages_a.keys())
+    removed = set(stages_a.keys()) - set(stages_b.keys())
+    common = set(stages_a.keys()) & set(stages_b.keys())
+
+    if added:
+        click.echo(f"\n+ Added stages: {', '.join(added)}")
+    if removed:
+        click.echo(f"\n- Removed stages: {', '.join(removed)}")
+
+    # Compare common stages
+    changed = []
+    for name in common:
+        if stages_a[name].stage_hash != stages_b[name].stage_hash:
+            changed.append(name)
+
+    if changed:
+        click.echo(f"\n~ Modified stages: {', '.join(changed)}")
+    elif not added and not removed:
+        click.echo("\n✓ Stage configurations match")
 
 
 @main.group()
