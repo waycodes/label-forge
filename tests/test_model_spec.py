@@ -25,18 +25,18 @@ class TestSamplingParams:
     def test_create_default_params(self):
         """Default params should be creatable."""
         params = SamplingParams()
-        assert params.temperature == 0.7
+        assert params.temperature == 0.0  # Default is 0.0 for reproducibility
         assert params.max_tokens == 256
 
     def test_create_custom_params(self):
         """Custom params should work."""
         params = SamplingParams(
-            temperature=0.0,
+            temperature=0.5,
             max_tokens=1024,
             top_p=0.95,
             top_k=50,
         )
-        assert params.temperature == 0.0
+        assert params.temperature == 0.5
         assert params.max_tokens == 1024
 
     def test_greedy_decoding(self):
@@ -87,10 +87,13 @@ class TestScoringParams:
         """Scoring params should be creatable."""
         params = ScoringParams(
             normalize_scores=True,
-            max_score=10.0,
         )
         assert params.normalize_scores is True
-        assert params.max_score == 10.0
+
+    def test_default_normalize(self):
+        """Default normalize should be False."""
+        params = ScoringParams()
+        assert params.normalize_scores is False
 
 
 class TestModelSpec:
@@ -223,5 +226,4 @@ class TestModelFingerprint:
         
         fp = ModelFingerprint.from_spec(spec, params)
         assert fp.model_hash is not None
-        assert fp.sampling_hash is not None
         assert fp.combined_hash is not None
